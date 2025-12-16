@@ -78,10 +78,6 @@ def interactive_mode(client):
     print("  set_green on|off")
     print("  set_blue on|off")
     print("  turn_off_all")
-    print("  start_cycle [interval]")
-    print("  stop_cycle")
-    print("  get_status")
-    print("  help")
     print("  quit")
     print("=" * 60)
 

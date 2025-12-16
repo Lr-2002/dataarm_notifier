@@ -8,7 +8,7 @@ import socket
 import json
 import threading
 import time
-from usb_lamp_controller import USBLampController, LightColor
+from .usb_lamp_controller import USBLampController, LightColor
 
 
 class SocketServer:
@@ -152,7 +152,7 @@ class SocketServer:
                     "set_green on|off": "控制绿灯开关",
                     "set_blue on|off": "控制蓝灯开关",
                     "turn_off_all": "关闭所有灯",
-                    "start_cycle [interval]": "开始颜色轮换(间隔秒数，默认1秒)",
+                    "start_cycle [interval]": "开始颜色轮换(间隔秒数，默认2秒)",
                     "stop_cycle": "停止颜色轮换",
                     "get_status": "获取当前状态"
                 }
@@ -184,7 +184,7 @@ class SocketServer:
             return {"status": "success", "message": "所有灯已关闭"}
 
         elif cmd == "start_cycle":
-            interval = 1.0
+            interval = 2.0
             if len(parts) > 1:
                 try:
                     interval = float(parts[1])
