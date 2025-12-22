@@ -4,21 +4,19 @@ Keyboard listener for detecting key presses.
 This module provides a cross-platform keyboard listener that can detect
 key presses in a separate thread, making it suitable for integration into
 larger systems.
+
+Uses pynput which works without root on X11/Wayland.
 """
 
 import threading
-import time
 from typing import Callable, Optional
-import sys
 
 try:
-    import keyboard
+    from pynput import keyboard
     KEYBOARD_AVAILABLE = True
 except (ImportError, OSError, AttributeError, RuntimeError) as e:
     KEYBOARD_AVAILABLE = False
-    # Store the error for debugging
     _keyboard_error = e
-    # Don't print warning here, let the controller handle it gracefully
 
 
 class KeyboardListener:
@@ -33,7 +31,7 @@ class KeyboardListener:
     def __init__(self):
         """Initialize the keyboard listener."""
         self._listening = False
-        self._thread: Optional[threading.Thread] = None
+        self._listener: Optional[keyboard.Listener] = None
         self._callbacks = {}
         self._lock = threading.Lock()
 
@@ -58,48 +56,48 @@ class KeyboardListener:
         with self._lock:
             self._callbacks.pop(key.lower(), None)
 
-    def _keyboard_event_handler(self, event):
+    def _on_press(self, key):
         """
-        Internal handler for keyboard events.
+        Internal handler for key press events.
 
         Args:
-            event: keyboard event object
+            key: pynput key object
         """
-        if event.event_type == keyboard.KEY_DOWN:
-            key_name = event.name.lower()
+        try:
+            # Handle special keys (like Enter, Space, etc.)
+            if hasattr(key, 'name'):
+                key_name = key.name.lower()
+            # Handle regular character keys
+            elif hasattr(key, 'char') and key.char:
+                key_name = key.char.lower()
+            else:
+                return
+
             with self._lock:
                 callback = self._callbacks.get(key_name)
             if callback:
                 callback()
+        except Exception as e:
+            print(f"Error in key handler: {e}")
 
     def start(self):
         """Start listening for keyboard events."""
         if not KEYBOARD_AVAILABLE:
-            raise RuntimeError("keyboard module not available. Install with: pip install keyboard")
+            raise RuntimeError("pynput module not available. Install with: pip install pynput")
 
         if self._listening:
             return
 
         self._listening = True
-        self._thread = threading.Thread(target=self._listen_loop, daemon=True)
-        self._thread.start()
-
-    def _listen_loop(self):
-        """Main listening loop running in a separate thread."""
-        try:
-            keyboard.hook(self._keyboard_event_handler)
-            while self._listening:
-                time.sleep(0.1)
-        except Exception as e:
-            print(f"Error in keyboard listener: {e}")
-        finally:
-            keyboard.unhook_all()
+        self._listener = keyboard.Listener(on_press=self._on_press)
+        self._listener.start()
 
     def stop(self):
         """Stop listening for keyboard events."""
         self._listening = False
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=1.0)
+        if self._listener:
+            self._listener.stop()
+            self._listener = None
 
     def is_listening(self) -> bool:
         """
