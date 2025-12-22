@@ -15,7 +15,14 @@
    - 轮换顺序：红 → 绿 → 蓝 → 红...
    - 多线程实现，响应迅速
 
-3. **Socket API接口**
+3. **键盘控制功能** ⭐ **新功能**
+   - 独立线程监听键盘输入
+   - 按Enter键实时切换颜色
+   - 支持自动颜色轮换模式
+   - 易于集成到其他系统中
+   - 跨平台支持（Windows/macOS/Linux）
+
+4. **Socket API接口**
    - 提供网络API接口
    - 支持多客户端同时连接
    - 完整的JSON响应格式
@@ -33,11 +40,17 @@ simple_notifier/
 ├── dataarm_notifier/         # 主包
 │   ├── __init__.py           # 包初始化
 │   ├── usb_lamp_controller.py # 核心控制器
+│   ├── keyboard_listener.py  # 键盘监听器
+│   ├── color_cycle_controller.py # 颜色循环控制器
 │   ├── socket_server.py      # Socket服务器
 │   └── socket_client.py      # Socket客户端
 ├── tests/                    # 测试目录
 ├── demo.py                   # 演示程序
 ├── test_three_light.py       # 三色灯测试脚本
+├── keyboard_demo.py          # 键盘控制演示 ⭐
+├── example_keyboard_control.py # 键盘控制示例 ⭐
+├── test_keyboard_listener.py # 键盘监听测试 ⭐
+├── KEYBOARD_CONTROL.md       # 键盘控制文档 ⭐
 ├── requirements.txt          # Python依赖包
 └── README.md                 # 说明文档
 ```
@@ -103,6 +116,7 @@ PWM值 = 1999 × (亮度百分比 / 100)
 
 - Python 3.6+
 - pyserial (用于串口通讯)
+- keyboard (用于键盘监听)
 
 ### 安装依赖
 
@@ -113,7 +127,12 @@ pip install -r requirements.txt
 或单独安装：
 
 ```bash
-pip install pyserial>=3.5
+pip install pyserial>=3.5 keyboard>=0.13.5
+```
+
+**注意**: 在Linux上可能需要sudo权限来安装keyboard模块：
+```bash
+sudo pip install keyboard
 ```
 
 ## 使用方法
@@ -132,7 +151,21 @@ python test_three_light.py
 3. 开启绿灯，停顿1秒
 4. 关闭所有灯
 
-### 2. 运行演示程序
+### 2. 键盘控制演示 ⭐ **新功能**
+
+最简单的键盘控制方式，实时切换颜色：
+
+```bash
+python keyboard_demo.py
+```
+
+功能说明：
+- 按 **ENTER** 键实时切换颜色（红 → 绿 → 蓝 → 红...）
+- 支持手动控制：`red`、`green`、`blue`、`auto`、`stop`、`off`
+- 独立线程运行，响应迅速
+- 完整交互式命令支持
+
+### 3. 运行演示程序
 
 ```bash
 python demo.py
@@ -142,13 +175,13 @@ python demo.py
 - 按回车键开始/停止颜色轮换
 - 输入 'quit' 退出程序
 
-### 3. 直接运行控制器
+### 4. 直接运行控制器
 
 ```bash
 python usb_lamp_controller.py
 ```
 
-### 4. Socket API服务器
+### 5. Socket API服务器
 
 启动服务器：
 
@@ -162,7 +195,7 @@ python socket_server.py
 python socket_server.py --host 0.0.0.0 --port 8888
 ```
 
-### 5. Socket客户端测试
+### 6. Socket客户端测试
 
 #### 交互模式
 
@@ -251,7 +284,7 @@ python socket_client.py --file commands.txt
 
 ### Python代码示例
 
-按照 `test_three_light.py` 的逻辑：
+#### 1. 基本灯控制（test_three_light.py）
 
 ```python
 from dataarm_notifier import USBLampController
@@ -276,6 +309,31 @@ time.sleep(1)
 controller.turn_off_all()
 
 controller.close()
+```
+
+#### 2. 键盘控制（⭐新功能）
+
+```python
+from dataarm_notifier import ColorCycleController
+import time
+
+# 创建键盘控制器
+with ColorCycleController(port='/dev/cu.usbserial-1330') as controller:
+    print("Press ENTER to cycle colors")
+    # 按 ENTER 键切换颜色（红 → 绿 → 蓝 → 红...）
+    # 或者手动控制：
+    controller.set_color('red')
+    time.sleep(1)
+    controller.set_color('green')
+    time.sleep(1)
+    controller.set_color('blue')
+    time.sleep(1)
+    controller.turn_off_all()
+
+    # 或者启动自动轮换
+    controller.start_auto_cycle(interval=2.0)  # 每2秒切换一次
+    time.sleep(10)  # 运行10秒
+    controller.stop_auto_cycle()
 ```
 
 ### Socket客户端示例

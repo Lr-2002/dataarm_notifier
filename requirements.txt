@@ -3,6 +3,9 @@
 # 必需：用于USB串口通讯（根据实际协议文档）
 pyserial>=3.5
 
+# 必需：用于键盘监听（支持Enter键切换颜色）
+keyboard>=0.13.5
+
 # 可选：如果设备是HID设备而非串口，可使用hidapi
 # hidapi
 
