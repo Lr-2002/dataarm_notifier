@@ -41,7 +41,7 @@ class USBLampController:
     - PWM值：1999为100%
     """
 
-    def __init__(self, port='/dev/cu.usbserial-1330', baudrate=4800):
+    def __init__(self, port='/dev/ttyUSB1', baudrate=4800):
         self.port = port
         self.baudrate = baudrate
         self.red_on = False
@@ -224,9 +224,10 @@ class USBLampController:
         """设置黄灯状态 (R+G)"""
         if on:
             self.turn_off_all()
-            self.set_light_on(True)
             self._set_color_brightness(LightColor.RED, brightness)
             self._set_color_brightness(LightColor.GREEN, brightness)
+
+            self.set_light_on(True)
             self.red_on = True
             self.green_on = True
         else:
@@ -235,7 +236,7 @@ class USBLampController:
             self.red_on = False
             self.green_on = False
 
-    def set_cyan(self, on=True, brightness=100):
+    def set_cyan(self, on=True, brightness=50):
         """设置青色灯状态 (G+B)"""
         if on:
             self.turn_off_all()

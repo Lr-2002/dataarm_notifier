@@ -77,7 +77,7 @@ class RobotStateNotifier:
 
         # Resolve port
         if port is None and auto_detect:
-            port = self._auto_detect_port()
+            port = '/dev/ttyUSB1' 
 
         if port:
             self._lamp = USBLampController(port=port)
@@ -150,7 +150,7 @@ class RobotStateNotifier:
         """Alias for teach() - Set state to RECORDING (GREEN)."""
         self.teach()
 
-    def saving(self, duration: float = 0, callback: Optional[Callable] = None) -> None:
+    def saving(self) -> None:
         """
         Set state to SAVING (YELLOW).
 
@@ -160,15 +160,6 @@ class RobotStateNotifier:
         """
         self.set_state(RobotState.SAVING)
 
-        if duration > 0:
-            def _saving_complete():
-                time.sleep(duration)
-                self.idle()
-                if callback:
-                    callback()
-
-            self._saving_thread = threading.Thread(target=_saving_complete, daemon=True)
-            self._saving_thread.start()
 
     def execute_start(self) -> None:
         """Set state to EXECUTE_RUNNING (WHITE)."""
@@ -241,7 +232,7 @@ class RecordingController:
         # Recording: GREEN -> SAVING (YELLOW) -> IDLE (CYAN)
     """
 
-    def __init__(self, port: Optional[str] = None, saving_duration: float = 3.0):
+    def __init__(self, port: Optional[str] = None, saving_duration: float = 0.0):
         """
         Initialize Recording Controller.
 
