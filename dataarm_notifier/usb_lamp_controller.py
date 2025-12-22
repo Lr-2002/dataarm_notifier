@@ -18,6 +18,9 @@ class LightColor(Enum):
     GREEN = "green"
     BLUE = "blue"
     WHITE = "white"
+    YELLOW = "yellow"      # R+G
+    CYAN = "cyan"          # G+B
+    MAGENTA = "magenta"    # R+B
     OFF = "off"
 
 
@@ -118,10 +121,6 @@ class USBLampController:
     def _send_command(self, command):
         """发送命令到串口设备"""
         try:
-            # 打印调试信息
-            hex_str = ' '.join(f'{b:02X}' for b in command)
-            print(f"[DEBUG] Sending: {hex_str}")
-
             # 尝试建立串口连接（如果尚未连接）
             if self.serial_conn is None:
                 try:
@@ -134,12 +133,9 @@ class USBLampController:
                         stopbits=2,
                         timeout=1
                     )
-                    print(f"[INFO] Serial port {self.port} opened")
                 except ImportError:
-                    print("[WARNING] pyserial not installed, using simulation mode")
                     return True
-                except Exception as e:
-                    print(f"[WARNING] Cannot open serial port: {e}, using simulation mode")
+                except Exception:
                     return True
 
             # 发送命令
@@ -148,8 +144,7 @@ class USBLampController:
             time.sleep(0.1)
             return True
 
-        except Exception as e:
-            print(f"[ERROR] Failed to send command: {e}")
+        except Exception:
             return False
 
     def set_brightness(self, color, brightness=100, auto_light_on=True):
@@ -169,7 +164,6 @@ class USBLampController:
         # 如果需要开启，先发送灯光开命令
         if brightness > 0 and auto_light_on:
             self.set_light_on(True)
-        print('pwm value is ', pwm_value)
         # 构建并发送颜色命令
         command = self._build_command(self.register_map[color], pwm_value)
         return self._send_command(command)
@@ -190,58 +184,86 @@ class USBLampController:
         """设置红灯状态"""
         self.red_on = on
         if on:
-            # 协议流程: 先开灯，再设置颜色
             self.turn_off_all()
             self.set_light_on(True)
             self._set_color_brightness(LightColor.RED, brightness)
-            print(f"Red light: ON (亮度: {brightness}%)")
         else:
-            # 关闭红灯（设置为0亮度）
             self._set_color_brightness(LightColor.RED, 0)
-            print(f"Red light: OFF")
 
     def set_green(self, on=True, brightness=100):
         """设置绿灯状态"""
         self.green_on = on
         if on:
-            # 协议流程: 先开灯，再设置颜色
-
             self.turn_off_all()
             self.set_light_on(True)
             self._set_color_brightness(LightColor.GREEN, brightness)
-            print(f"Green light: ON (亮度: {brightness}%)")
         else:
-            # 关闭绿灯（设置为0亮度）
             self._set_color_brightness(LightColor.GREEN, 0)
-            print(f"Green light: OFF")
 
     def set_blue(self, on=True, brightness=100):
         """设置蓝灯状态"""
         self.blue_on = on
         if on:
             self.turn_off_all()
-            # 协议流程: 先开灯，再设置颜色
             self.set_light_on(True)
             self._set_color_brightness(LightColor.BLUE, brightness)
-            print(f"Blue light: ON (亮度: {brightness}%)")
         else:
-            # 关闭蓝灯（设置为0亮度）
             self._set_color_brightness(LightColor.BLUE, 0)
-            print(f"Blue light: OFF")
 
     def set_white(self, on=True, brightness=100):
         """设置白灯状态"""
         self.white_on = on
         if on:
-            # 协议流程: 先开灯，再设置颜色
             self.turn_off_all()
             self.set_light_on(True)
             self._set_color_brightness(LightColor.WHITE, brightness)
-            print(f"White light: ON (亮度: {brightness}%)")
         else:
-            # 关闭白灯（设置为0亮度）
             self._set_color_brightness(LightColor.WHITE, 0)
-            print(f"White light: OFF")
+
+    def set_yellow(self, on=True, brightness=100):
+        """设置黄灯状态 (R+G)"""
+        if on:
+            self.turn_off_all()
+            self.set_light_on(True)
+            self._set_color_brightness(LightColor.RED, brightness)
+            self._set_color_brightness(LightColor.GREEN, brightness)
+            self.red_on = True
+            self.green_on = True
+        else:
+            self._set_color_brightness(LightColor.RED, 0)
+            self._set_color_brightness(LightColor.GREEN, 0)
+            self.red_on = False
+            self.green_on = False
+
+    def set_cyan(self, on=True, brightness=100):
+        """设置青色灯状态 (G+B)"""
+        if on:
+            self.turn_off_all()
+            self.set_light_on(True)
+            self._set_color_brightness(LightColor.GREEN, brightness)
+            self._set_color_brightness(LightColor.BLUE, brightness)
+            self.green_on = True
+            self.blue_on = True
+        else:
+            self._set_color_brightness(LightColor.GREEN, 0)
+            self._set_color_brightness(LightColor.BLUE, 0)
+            self.green_on = False
+            self.blue_on = False
+
+    def set_magenta(self, on=True, brightness=100):
+        """设置品红灯状态 (R+B)"""
+        if on:
+            self.turn_off_all()
+            self.set_light_on(True)
+            self._set_color_brightness(LightColor.RED, brightness)
+            self._set_color_brightness(LightColor.BLUE, brightness)
+            self.red_on = True
+            self.blue_on = True
+        else:
+            self._set_color_brightness(LightColor.RED, 0)
+            self._set_color_brightness(LightColor.BLUE, 0)
+            self.red_on = False
+            self.blue_on = False
 
     def _set_color_brightness(self, color, brightness=100):
         """内部方法：仅设置颜色亮度（不控制总开关）"""
@@ -263,18 +285,14 @@ class USBLampController:
         self.blue_on = False
         self.white_on = False
 
-        # 设置所有颜色亮度为0（不控制总开关）
         self._set_color_brightness(LightColor.RED, 0)
         self._set_color_brightness(LightColor.GREEN, 0)
         self._set_color_brightness(LightColor.BLUE, 0)
         self._set_color_brightness(LightColor.WHITE, 0)
 
-        print("All lights: OFF")
-
     def start_color_cycle(self, interval=2.0):
         """开始颜色轮换"""
         if self.color_cycle:
-            print("Color cycle already running")
             return
 
         self.color_cycle = True
@@ -285,7 +303,6 @@ class USBLampController:
             daemon=True
         )
         self.cycle_thread.start()
-        print("Color cycle started")
 
     def stop_color_cycle(self):
         """停止颜色轮换"""
@@ -293,7 +310,6 @@ class USBLampController:
         if self.cycle_thread:
             self.cycle_thread.join(timeout=1.0)
         self.turn_off_all()
-        print("Color cycle stopped")
 
     def _cycle_colors(self, interval):
         """颜色轮换循环
@@ -344,7 +360,6 @@ class USBLampController:
         """关闭串口连接"""
         if self.serial_conn and self.serial_conn.is_open:
             self.serial_conn.close()
-            print(f"[INFO] Serial port {self.port} closed")
 
 
 def main():

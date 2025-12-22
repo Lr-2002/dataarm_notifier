@@ -32,11 +32,15 @@ __license__ = "MIT"
 from .usb_lamp_controller import USBLampController, LightColor
 from .keyboard_listener import KeyboardListener
 from .color_cycle_controller import ColorCycleController, ColorCycleConfig
+from .robot_state_notifier import RobotStateNotifier, RobotState, RecordingController
 
 __all__ = [
     "USBLampController",
     "LightColor",
     "KeyboardListener",
     "ColorCycleController",
-    "ColorCycleConfig"
+    "ColorCycleConfig",
+    "RobotStateNotifier",
+    "RobotState",
+    "RecordingController",
 ]

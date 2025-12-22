@@ -1,414 +1,182 @@
-# USB报警灯控制器
+# DataArm Notifier
 
-一个基于实际USB串口通讯协议的Python程序，支持控制红灯、绿灯、蓝灯，以及通过Enter键实现颜色轮换功能。
+A plug-and-play USB lamp controller for robot state indication. Supports RGB color combinations and keyboard-triggered recording control.
 
-## 功能特性
+## Features
 
-1. **控制三种颜色的灯**
-   - 支持控制红灯、绿灯、蓝灯
-   - 支持PWM调光（0-100%亮度控制）
-   - 支持一键关闭所有灯
+- **7 Colors**: RED, GREEN, BLUE, YELLOW (R+G), CYAN (G+B), MAGENTA (R+B), WHITE (R+G+B)
+- **Robot State Indication**: Visual feedback for IDLE, TEACH, EXECUTE, SAVING, ERROR states
+- **Keyboard Control**: Press Enter to toggle recording (no root required on X11)
+- **Auto Port Detection**: Automatically finds USB serial device
+- **Plug and Play**: Minimal configuration needed
 
-2. **颜色轮换功能**
-   - 按Enter键开始/停止颜色轮换
-   - 默认轮换间隔：2秒
-   - 轮换顺序：红 → 绿 → 蓝 → 红...
-   - 多线程实现，响应迅速
+## Quick Start
 
-3. **键盘控制功能** ⭐ **新功能**
-   - 独立线程监听键盘输入
-   - 按Enter键实时切换颜色
-   - 支持自动颜色轮换模式
-   - 易于集成到其他系统中
-   - 跨平台支持（Windows/macOS/Linux）
-
-4. **Socket API接口**
-   - 提供网络API接口
-   - 支持多客户端同时连接
-   - 完整的JSON响应格式
-
-4. **实际协议支持**
-   - 基于Modbus RTU协议的串口通讯
-   - 波特率：4800
-   - 数据格式：8位，无校验，2位停止位
-   - 标准CRC16校验
-
-## 项目结构
-
-```
-simple_notifier/
-├── dataarm_notifier/         # 主包
-│   ├── __init__.py           # 包初始化
-│   ├── usb_lamp_controller.py # 核心控制器
-│   ├── keyboard_listener.py  # 键盘监听器
-│   ├── color_cycle_controller.py # 颜色循环控制器
-│   ├── socket_server.py      # Socket服务器
-│   └── socket_client.py      # Socket客户端
-├── tests/                    # 测试目录
-├── demo.py                   # 演示程序
-├── test_three_light.py       # 三色灯测试脚本
-├── keyboard_demo.py          # 键盘控制演示 ⭐
-├── example_keyboard_control.py # 键盘控制示例 ⭐
-├── test_keyboard_listener.py # 键盘监听测试 ⭐
-├── KEYBOARD_CONTROL.md       # 键盘控制文档 ⭐
-├── requirements.txt          # Python依赖包
-└── README.md                 # 说明文档
-```
-
-## 协议说明
-
-本程序基于实际USB报警灯的串口通讯协议实现，具体参数如下：
-
-### 电气参数
-- **产品型号**: USB报警灯
-- **额定电压**: 5V
-- **控制方式**: USB串口通讯
-- **报警颜色**: 红色、黄色、绿色、白色、蓝色
-- **闪烁方式**: PWM调光
-
-### 串口参数
-- **波特率**: 4800
-- **数据位**: 8位
-- **校验位**: 无校验
-- **停止位**: 2位
-
-### 通讯格式 (Modbus RTU)
-```
-地址码 (1字节) + 功能码 (1字节) + 寄存器地址 (2字节) + 寄存器数据 (2字节) + CRC16校验 (2字节)
-```
-
-**字段说明:**
-- **地址码**: 设备地址，默认 `0x01`
-- **功能码**: `0x06` (写单个寄存器)
-- **寄存器地址**: 见下表
-- **寄存器数据**: PWM值，1999为100%亮度
-- **CRC16**: 标准CRC16-MODBUS校验码
-
-### 寄存器地址表
-| 地址 | 功能 | 说明 |
-|------|------|------|
-| 0x0002 | 蓝灯 | 控制蓝灯亮度 |
-| 0x0003 | 绿灯 | 控制绿灯亮度 |
-| 0x0004 | 灯光开关 | 控制灯光总开关 |
-| 0x0008 | 红灯 | 控制红灯亮度 |
-
-### 参考指令示例
-| 指令 | 说明 |
-|------|------|
-| `01 06 00 04 00 01 xx xx` | 灯光开 |
-| `01 06 00 08 07 CF xx xx` | 红灯100%亮度 (1999 = 0x07CF) |
-| `01 06 00 03 07 CF xx xx` | 绿灯100%亮度 (1999 = 0x07CF) |
-| `01 06 00 02 07 CF xx xx` | 蓝灯100%亮度 (1999 = 0x07CF) |
-| `01 06 00 08 03 E7 xx xx` | 红灯50%亮度 (999 = 0x03E7) |
-
-### 亮度计算
-PWM值 = 1999 × (亮度百分比 / 100)
-
-**示例:**
-- 100%亮度: 1999 (0x07CF)
-- 50%亮度: 999 (0x03E7)
-- 25%亮度: 499 (0x01F3)
-- 10%亮度: 199 (0x00C7)
-
-## 安装说明
-
-### 环境要求
-
-- Python 3.6+
-- pyserial (用于串口通讯)
-- keyboard (用于键盘监听)
-
-### 安装依赖
+### Installation
 
 ```bash
-pip install -r requirements.txt
+pip install pyserial pynput
 ```
 
-或单独安装：
+### Basic Usage
 
-```bash
-pip install pyserial>=3.5 keyboard>=0.13.5
+```python
+from dataarm_notifier import RobotStateNotifier
+
+# Auto-detect USB port
+notifier = RobotStateNotifier()
+
+# Set states
+notifier.idle()       # CYAN
+notifier.teach()      # GREEN (recording)
+notifier.saving(3)    # YELLOW for 3 seconds
+notifier.error()      # RED
+
+notifier.cleanup()
 ```
 
-**注意**: 在Linux上可能需要sudo权限来安装keyboard模块：
-```bash
-sudo pip install keyboard
+### Recording Controller
+
+```python
+from dataarm_notifier import RecordingController
+
+def on_start():
+    print("Recording started!")
+
+def on_stop():
+    print("Recording stopped!")
+
+controller = RecordingController(saving_duration=3.0)
+controller.on_recording_start(on_start)
+controller.on_recording_stop(on_stop)
+
+# Press ENTER to toggle recording
+controller.start()
 ```
 
-## 使用方法
+## State Colors
 
-### 1. 运行三色灯测试
+| State | Color | RGB |
+|-------|-------|-----|
+| IDLE | CYAN | G+B |
+| TEACH (recording) | GREEN | G |
+| SAVING | YELLOW | R+G |
+| EXECUTE (stopped) | BLUE | B |
+| EXECUTE (running) | WHITE | R+G+B |
+| ERROR | RED | R |
 
-最简单的方式，直接运行测试脚本：
+## API Reference
 
-```bash
-python test_three_light.py
+### RobotStateNotifier
+
+```python
+from dataarm_notifier import RobotStateNotifier, RobotState
+
+notifier = RobotStateNotifier(port=None, auto_detect=True)
+
+# State methods
+notifier.set_state(RobotState.TEACH)
+notifier.idle()
+notifier.teach()
+notifier.recording()  # alias for teach()
+notifier.saving(duration=3.0, callback=None)
+notifier.execute_start()
+notifier.execute_stop()
+notifier.error()
+
+# Keyboard
+notifier.on_enter_pressed(callback)
+notifier.start_keyboard_listener()
+notifier.stop_keyboard_listener()
+
+# Cleanup
+notifier.cleanup()
 ```
 
-这个脚本会：
-1. 开启红灯，停顿1秒
-2. 开启蓝灯，停顿1秒
-3. 开启绿灯，停顿1秒
-4. 关闭所有灯
+### RecordingController
 
-### 2. 键盘控制演示 ⭐ **新功能**
+```python
+from dataarm_notifier import RecordingController
 
-最简单的键盘控制方式，实时切换颜色：
+controller = RecordingController(port=None, saving_duration=3.0)
 
-```bash
-python keyboard_demo.py
+controller.on_recording_start(callback)
+controller.on_recording_stop(callback)
+controller.start()
+controller.stop()
+
+# Properties
+controller.is_recording  # bool
+controller.notifier      # RobotStateNotifier
 ```
 
-功能说明：
-- 按 **ENTER** 键实时切换颜色（红 → 绿 → 蓝 → 红...）
-- 支持手动控制：`red`、`green`、`blue`、`auto`、`stop`、`off`
-- 独立线程运行，响应迅速
-- 完整交互式命令支持
-
-### 3. 运行演示程序
-
-```bash
-python demo.py
-```
-
-功能说明：
-- 按回车键开始/停止颜色轮换
-- 输入 'quit' 退出程序
-
-### 4. 直接运行控制器
-
-```bash
-python usb_lamp_controller.py
-```
-
-### 5. Socket API服务器
-
-启动服务器：
-
-```bash
-python socket_server.py
-```
-
-或指定IP和端口：
-
-```bash
-python socket_server.py --host 0.0.0.0 --port 8888
-```
-
-### 6. Socket客户端测试
-
-#### 交互模式
-
-```bash
-python socket_client.py --host localhost --port 8888
-```
-
-#### 单命令模式
-
-```bash
-python socket_client.py --command "set_red on"
-python socket_client.py --command "set_green on"
-python socket_client.py --command "set_blue on"
-python socket_client.py --command "turn_off_all"
-```
-
-#### 批量模式
-
-创建命令文件 `commands.txt`：
-
-```
-set_red on
-wait 1
-set_blue on
-wait 1
-set_green on
-wait 1
-turn_off_all
-```
-
-执行：
-
-```bash
-python socket_client.py --file commands.txt
-```
-
-## API命令说明
-
-### 控制命令
-
-| 命令 | 参数 | 说明 |
-|------|------|------|
-| `set_red` | on/off | 控制红灯开关 |
-| `set_green` | on/off | 控制绿灯开关 |
-| `set_blue` | on/off | 控制蓝灯开关 |
-| `turn_off_all` | - | 关闭所有灯 |
-
-### 颜色轮换命令
-
-| 命令 | 参数 | 说明 |
-|------|------|------|
-| `start_cycle` | interval(可选) | 开始颜色轮换(默认2秒间隔) |
-| `stop_cycle` | - | 停止颜色轮换 |
-
-### 查询命令
-
-| 命令 | 参数 | 说明 |
-|------|------|------|
-| `get_status` | - | 获取当前状态 |
-| `help` | - | 显示帮助信息 |
-
-## 响应格式
-
-所有API响应均为JSON格式：
-
-### 成功响应
-
-```json
-{
-  "status": "success",
-  "message": "红灯已开启",
-  "data": { ... }  // 可选，包含详细数据
-}
-```
-
-### 错误响应
-
-```json
-{
-  "status": "error",
-  "message": "错误描述"
-}
-```
-
-## 示例
-
-### Python代码示例
-
-#### 1. 基本灯控制（test_three_light.py）
+### USBLampController (Low-level)
 
 ```python
 from dataarm_notifier import USBLampController
-import time
 
-# 创建控制器实例
-controller = USBLampController(port='/dev/cu.usbserial-1330')
+lamp = USBLampController(port='/dev/ttyUSB1')
 
-# 开启红灯，停顿1秒
-controller.set_red(on=True)
-time.sleep(1)
+# Single colors
+lamp.set_red()
+lamp.set_green()
+lamp.set_blue()
+lamp.set_white()
 
-# 开启蓝灯，停顿1秒
-controller.set_blue(on=True)
-time.sleep(1)
+# Combined colors
+lamp.set_yellow()   # R+G
+lamp.set_cyan()     # G+B
+lamp.set_magenta()  # R+B
 
-# 开启绿灯，停顿1秒
-controller.set_green(on=True)
-time.sleep(1)
-
-# 关闭所有灯
-controller.turn_off_all()
-
-controller.close()
+lamp.turn_off_all()
+lamp.close()
 ```
 
-#### 2. 键盘控制（⭐新功能）
+## Hardware Protocol
 
-```python
-from dataarm_notifier import ColorCycleController
-import time
+- **Baud Rate**: 4800
+- **Data Bits**: 8
+- **Parity**: None
+- **Stop Bits**: 2
+- **Protocol**: Modbus RTU
 
-# 创建键盘控制器
-with ColorCycleController(port='/dev/cu.usbserial-1330') as controller:
-    print("Press ENTER to cycle colors")
-    # 按 ENTER 键切换颜色（红 → 绿 → 蓝 → 红...）
-    # 或者手动控制：
-    controller.set_color('red')
-    time.sleep(1)
-    controller.set_color('green')
-    time.sleep(1)
-    controller.set_color('blue')
-    time.sleep(1)
-    controller.turn_off_all()
+### Register Map
 
-    # 或者启动自动轮换
-    controller.start_auto_cycle(interval=2.0)  # 每2秒切换一次
-    time.sleep(10)  # 运行10秒
-    controller.stop_auto_cycle()
+| Address | Function |
+|---------|----------|
+| 0x0001 | White LED |
+| 0x0002 | Blue LED |
+| 0x0003 | Green LED |
+| 0x0004 | Light switch |
+| 0x0008 | Red LED |
+
+## Project Structure
+
+```
+dataarm_notifier/
+├── dataarm_notifier/
+│   ├── __init__.py
+│   ├── usb_lamp_controller.py    # Low-level lamp control
+│   ├── keyboard_listener.py      # Keyboard detection (pynput)
+│   ├── robot_state_notifier.py   # High-level state API
+│   ├── color_cycle_controller.py # Color cycling
+│   ├── socket_server.py          # Network API
+│   └── socket_client.py          # Network client
+├── test_state_notifier.py        # State test script
+├── test_keyboard.py              # Keyboard test script
+└── README.md
 ```
 
-### Socket客户端示例
+## Testing
 
-```python
-import socket
-import json
+```bash
+# Test all colors
+python test_state_notifier.py
 
-# 连接到服务器
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.connect(('localhost', 8888))
-
-# 发送命令
-sock.send(b'set_red on\n')
-response = json.loads(sock.recv(1024))
-print(response)
-
-sock.close()
+# Test keyboard recording
+python test_state_notifier.py record
 ```
 
-## 自定义USB设备协议
+## License
 
-如果需要控制特定的USB设备，需要修改 `usb_lamp_controller.py` 中的 `_send_usb_command` 方法：
-
-```python
-def _send_usb_command(self, color, state):
-    # 根据实际设备协议实现USB通信
-    # 示例1: HID设备
-    # import usb.core
-    # device = usb.core.find(idVendor=0xXXXX, idProduct=0xXXXX)
-    # report = self._build_hid_report(color, state)
-    # device.write(1, report)
-
-    # 示例2: 串口设备
-    # import serial
-    # ser = serial.Serial('/dev/ttyUSB0', 9600)
-    # command = self._build_serial_command(color, state)
-    # ser.write(command)
-
-    # 示例3: 厂商自定义协议
-    # 根据厂商文档实现具体协议
-
-    print(f"发送命令: {color.value} -> {state}")
-```
-
-## 常见问题
-
-### Q: 程序运行正常但灯不亮？
-
-A: 默认实现是模拟模式，需要根据实际USB设备修改 `_send_usb_command` 方法。
-
-### Q: 如何修改颜色轮换顺序？
-
-A: 修改 `usb_lamp_controller.py` 中的 `self.colors` 列表：
-
-```python
-self.colors = [
-    LightColor.RED,
-    LightColor.GREEN,
-    LightColor.BLUE,
-]
-```
-
-### Q: 如何同时显示多种颜色？
-
-A: 程序已支持组合颜色，例如同时开启红、绿灯会产生黄色。
-
-### Q: 服务器可以支持多少客户端？
-
-A: Socket服务器支持多客户端同时连接，每个客户端独立处理。
-
-## 许可证
-
-本项目采用MIT许可证。
-
-## 作者
-
-Claude Code - Anthropic官方CLI工具
+MIT
