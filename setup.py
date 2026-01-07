@@ -9,14 +9,24 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+    base_requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+
+# Telemetry module requirements
+telemetry_requirements = [
+    "rerun-sdk>=0.15.0",
+    "opencv-python>=4.8.0",
+    "pyyaml>=6.0",
+    "numpy>=1.24.0",
+]
+
+all_requirements = base_requirements + telemetry_requirements
 
 setup(
     name="dataarm-notifier",
-    version="1.0.0",
+    version="1.1.0",
     author="lr-2002",
     author_email="wang2629651228@gmail.com",
-    description="USB报警灯控制器 - 支持控制红灯、绿灯、蓝灯以及颜色轮换",
+    description="USB报警灯控制器 + Robot Telemetry Visualization with Rerun SDK",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/YOUR_USERNAME/dataarm-notifier",
@@ -41,7 +51,7 @@ setup(
     ],
     python_requires=">=3.6",
     packages=find_packages(),
-    install_requires=requirements,
+    install_requires=all_requirements,
     extras_require={
         "dev": [
             "pytest>=6.0",
@@ -55,6 +65,7 @@ setup(
             "usb-lamp=dataarm_notifier.usb_lamp_controller:main",
             "usb-lamp-server=dataarm_notifier.socket_server:main",
             "usb-lamp-client=dataarm_notifier.socket_client:main",
+            "telemetry=dataarm_notifier.cli.telemetry_cli:main",
         ],
     },
     include_package_data=True,

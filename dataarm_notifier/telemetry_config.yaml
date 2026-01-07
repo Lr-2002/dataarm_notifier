@@ -1,0 +1,39 @@
+# Telemetry Configuration File
+# For Real-Time Robot Telemetry & Notification Module
+
+telemetry:
+  frequency: 50  # Hz - data transmission frequency
+  buffer_size: 1000  # samples - history buffer size
+
+thresholds:
+  tracking_deviation: 0.3  # radians - threshold for tracking error
+  torque_warning: 1.8  # Nm - threshold for warning
+  torque_error: 2.5  # Nm - threshold for error
+  velocity_max: 5.0  # rad/s - maximum safe velocity
+
+simulation:
+  default_profile: sine_tracking
+  profiles:
+    - name: sine_tracking
+      type: sine
+      amplitude: 1.0
+      frequency: 0.5
+      phase: 0.0
+      noise: 0.02
+      lag: 0.1
+
+    - name: step_error
+      type: step
+      amplitude: 0.5
+      step_time: 2.0
+      noise: 0.01
+
+    - name: ramp_test
+      type: ramp
+      slope: 0.5
+      noise: 0.005
+
+    - name: torque_warning_test
+      type: torque_threshold
+      threshold: 1.8
+      trigger_delay: 1.0
