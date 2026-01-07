@@ -16,7 +16,7 @@ def example_basic_control():
     print("=" * 60)
 
     # 创建控制器实例
-    controller = USBLampController(port='/dev/cu.usbserial-1330')
+    controller = USBLampController(port="/dev/ttyUSB1")
 
     print("\n1. 开启红灯")
     controller.set_red(on=True)
@@ -42,7 +42,7 @@ def example_brightness_control():
     print("示例2: 亮度控制")
     print("=" * 60)
 
-    controller = USBLampController(port='/dev/cu.usbserial-1330')
+    controller = USBLampController(port="/dev/cu.usbserial-1330")
 
     brightness_levels = [100, 75, 50, 25, 0]
 
@@ -61,7 +61,7 @@ def example_color_cycle():
     print("示例3: 颜色轮换")
     print("=" * 60)
 
-    controller = USBLampController(port='/dev/cu.usbserial-1330')
+    controller = USBLampController(port="/dev/cu.usbserial-1330")
 
     print("\n开始颜色轮换 (间隔2秒)...")
     controller.start_color_cycle()
@@ -93,14 +93,14 @@ def main():
 
         choice = input("\n请输入选择 (0-3): ").strip()
 
-        if choice == '0':
+        if choice == "0":
             print("\n程序退出")
             break
-        elif choice == '1':
+        elif choice == "1":
             example_basic_control()
-        elif choice == '2':
+        elif choice == "2":
             example_brightness_control()
-        elif choice == '3':
+        elif choice == "3":
             example_color_cycle()
         else:
             print("\n无效选择，请重新输入")

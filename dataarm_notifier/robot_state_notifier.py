@@ -13,6 +13,7 @@ States and Colors:
 """
 
 import glob
+import os
 import time
 import threading
 from enum import Enum
@@ -75,9 +76,12 @@ class RobotStateNotifier:
         self._saving_thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
 
-        # Resolve port
+        # Resolve port - use symlink first, then fall back to ttyUSB1
         if port is None and auto_detect:
-            port = '/dev/ttyUSB1' 
+            if os.path.exists('/dev/dataarm_notifier'):
+                port = '/dev/dataarm_notifier'
+            else:
+                port = '/dev/ttyUSB1'
 
         if port:
             self._lamp = USBLampController(port=port)
