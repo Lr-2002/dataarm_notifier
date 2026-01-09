@@ -26,6 +26,7 @@ from .data_types import (
 from .config import TelemetryConfig
 from .producer import TelemetryProducer
 from .simulation import SimulationEngine, SimulationData
+from .can_metrics_server import CANMetricsServer
 
 __all__ = [
     # Enums
@@ -42,6 +43,8 @@ __all__ = [
     # Core classes
     "TelemetryProducer",
     "SimulationEngine",
+    # CAN Metrics
+    "CANMetricsServer",
 ]
 
 __version__ = "1.1.0"

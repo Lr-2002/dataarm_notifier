@@ -1,5 +1,6 @@
 """Telemetry Producer - Main class for sending telemetry data to Rerun viewer."""
 
+import asyncio
 import logging
 import time
 from typing import Optional
@@ -17,6 +18,7 @@ from .data_types import (
 )
 from .enums import StatusLevel
 from .simulation import SimulationData
+from .can_metrics_server import CANMetricsServer
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ class TelemetryProducer:
     - Dynamics monitoring (velocity, torque, acceleration)
     - Camera feed streaming
     - System health alerts and event logging
+    - CAN metrics server for receiving data from can_monitor
     """
 
     def __init__(
@@ -51,6 +54,10 @@ class TelemetryProducer:
         self._start_time: float = time.time()
         self._last_status: StatusLevel = StatusLevel.INFO
         self._event_logged: set = set()  # Track logged events to avoid duplicates
+
+        # CAN metrics server (optional)
+        self._can_server: Optional[CANMetricsServer] = None
+        self._can_server_task: Optional[asyncio.Task] = None
 
         # Initialize Rerun
         if connect:
@@ -301,3 +308,36 @@ class TelemetryProducer:
 
         if data.status in (StatusLevel.WARNING, StatusLevel.ERROR):
             self.log_event(data.status, data.status_message)
+
+    # =========================================================================
+    # CAN Metrics Server Methods (T020)
+    # =========================================================================
+
+    def start_can_server(self, port: int = 9877) -> None:
+        """Start the CAN metrics TCP server.
+
+        Args:
+            port: TCP port to listen on (default: 9877)
+        """
+        if self._can_server is not None:
+            logger.warning("CAN metrics server already running")
+            return
+
+        self._can_server = CANMetricsServer(port=port, app_name=self.app_name)
+        self._can_server_task = asyncio.create_task(self._can_server.start())
+        logger.info(f"CAN metrics server starting on port {port}")
+
+    def stop_can_server(self) -> None:
+        """Stop the CAN metrics TCP server."""
+        if self._can_server is None:
+            return
+
+        asyncio.create_task(self._can_server.stop())
+        self._can_server = None
+        self._can_server_task = None
+        logger.info("CAN metrics server stopped")
+
+    @property
+    def can_server(self) -> Optional[CANMetricsServer]:
+        """Get the CAN metrics server instance."""
+        return self._can_server
