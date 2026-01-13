@@ -19,6 +19,7 @@ from .data_types import (
 from .enums import StatusLevel
 from .simulation import SimulationData
 from .can_metrics_server import CANMetricsServer
+from .arm_telemetry_server import ArmTelemetryServer
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,8 @@ class TelemetryProducer:
         # CAN metrics server (optional)
         self._can_server: Optional[CANMetricsServer] = None
         self._can_server_task: Optional[asyncio.Task] = None
+        self._arm_server: Optional[ArmTelemetryServer] = None
+        self._arm_server_task: Optional[asyncio.Task] = None
 
         # Initialize Rerun
         if connect:
@@ -313,19 +316,25 @@ class TelemetryProducer:
     # CAN Metrics Server Methods (T020)
     # =========================================================================
 
-    def start_can_server(self, port: int = 9877) -> None:
+    def start_can_server(self, port: int = 9877, host: str = "127.0.0.1") -> None:
         """Start the CAN metrics TCP server.
 
         Args:
             port: TCP port to listen on (default: 9877)
+            host: Host address to bind (default: 127.0.0.1)
         """
         if self._can_server is not None:
             logger.warning("CAN metrics server already running")
             return
 
-        self._can_server = CANMetricsServer(port=port, app_name=self.app_name)
+        self._can_server = CANMetricsServer(
+            port=port,
+            host=host,
+            app_name=self.app_name,
+            init_rerun=False,
+        )
         self._can_server_task = asyncio.create_task(self._can_server.start())
-        logger.info(f"CAN metrics server starting on port {port}")
+        logger.info(f"CAN metrics server starting on {host}:{port}")
 
     def stop_can_server(self) -> None:
         """Stop the CAN metrics TCP server."""
@@ -341,3 +350,36 @@ class TelemetryProducer:
     def can_server(self) -> Optional[CANMetricsServer]:
         """Get the CAN metrics server instance."""
         return self._can_server
+
+    # =========================================================================
+    # Arm Telemetry Server Methods
+    # =========================================================================
+
+    def start_arm_server(self, port: int = 9878, host: str = "127.0.0.1") -> None:
+        """Start the arm telemetry TCP server.
+
+        Args:
+            port: TCP port to listen on (default: 9878)
+            host: Host address to bind (default: 127.0.0.1)
+        """
+        if self._arm_server is not None:
+            logger.warning("Arm telemetry server already running")
+            return
+
+        self._arm_server = ArmTelemetryServer(port=port, host=host, timeline="time_s")
+        self._arm_server_task = asyncio.create_task(self._arm_server.start())
+        logger.info(f"Arm telemetry server starting on {host}:{port}")
+
+    def stop_arm_server(self) -> None:
+        """Stop the arm telemetry TCP server."""
+        if self._arm_server is None:
+            return
+
+        asyncio.create_task(self._arm_server.stop())
+        self._arm_server = None
+        self._arm_server_task = None
+        logger.info("Arm telemetry server stopped")
+
+    @property
+    def arm_server(self) -> Optional[ArmTelemetryServer]:
+        return self._arm_server

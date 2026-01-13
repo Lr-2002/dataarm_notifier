@@ -5,14 +5,15 @@ from unittest.mock import Mock, AsyncMock, patch
 import asyncio
 
 
+@pytest.fixture
+def client():
+    """Create a test client instance."""
+    from control.hardware.can_monitor.client_adapter import CANMetricsClient
+    return CANMetricsClient(host="127.0.0.1", port=9877)
+
+
 class TestCANMetricsClient:
     """Test cases for CANMetricsClient."""
-
-    @pytest.fixture
-    def client(self):
-        """Create a test client instance."""
-            from dataarm.control.hardware.can_monitor.client_adapter import CANMetricsClient
-        return CANMetricsClient(host="127.0.0.1", port=9877)
 
     def test_initialization(self, client):
         """Test client initialization with default values."""
@@ -39,10 +40,15 @@ class TestCANMetricsClientConnection:
     def mock_stream(self):
         """Create mock stream reader and writer."""
         reader = AsyncMock()
-        writer = AsyncMock()
+        # StreamWriter.write() is synchronous in asyncio, but drain()/wait_closed() are async.
+        writer = Mock()
+        writer.write = Mock()
+        writer.drain = AsyncMock()
+        writer.close = Mock()
+        writer.wait_closed = AsyncMock()
         return reader, writer
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_connect_success(self, client, mock_stream):
         """Test successful connection."""
         reader, writer = mock_stream
@@ -56,7 +62,7 @@ class TestCANMetricsClientConnection:
             assert client._connected is True
             mock_conn.assert_called_once_with("127.0.0.1", 9877)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_connect_refused(self, client):
         """Test connection refused."""
         with patch('asyncio.open_connection', new_callable=AsyncMock) as mock_conn:
@@ -67,13 +73,13 @@ class TestCANMetricsClientConnection:
             assert result is False
             assert client._connected is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_send_message_not_connected(self, client):
         """Test sending message when not connected."""
         result = await client.send_metrics({"test": "data"})
         assert result is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_send_metrics_format(self, client, mock_stream):
         """Test metrics message format."""
         reader, writer = mock_stream
@@ -100,7 +106,7 @@ class TestCANMetricsClientConnection:
             assert "timestamp_ns" in message
             assert message["data"]["bus_load_percent"] == 25.5
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_send_event_format(self, client, mock_stream):
         """Test event message format."""
         reader, writer = mock_stream
@@ -126,7 +132,7 @@ class TestCANMetricsClientConnection:
             assert message["type"] == "event"
             assert message["data"]["event_type"] == "timeout"
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_send_mapping_format(self, client, mock_stream):
         """Test mapping message format."""
         reader, writer = mock_stream
@@ -148,13 +154,14 @@ class TestCANMetricsClientConnection:
             import json
             message = json.loads(sent_data)
             assert message["type"] == "mapping"
-            assert message["data"]["joint_names"][1] == "shoulder_joint"
+            # JSON serializes dict keys as strings
+            assert message["data"]["joint_names"]["1"] == "shoulder_joint"
 
 
 class TestCANMetricsClientReconnect:
     """Test cases for CANMetricsClient auto-reconnect."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_stop_resets_state(self, client):
         """Test that stop resets connection state."""
         client._connected = True
@@ -165,7 +172,7 @@ class TestCANMetricsClientReconnect:
         assert client._running is False
         assert client._connected is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_reconnect_on_disconnect(self, client):
         """Test that client can detect disconnect and reconnect."""
         # This is a conceptual test - in practice, this would require

@@ -14,7 +14,7 @@ CAN Bus 实时监控与 Rerun 可视化集成系统。
          ▼                                        ▼
 ┌─────────────────────────────────────────────────────────┐
 │                      Rerun Viewer                       │
-│  can/bus/*  |  can/rtt/*  |  can/joint/*  |  notify/*  │
+│  can/bus/*  |  can/fps/*  |  can/jitter/*  |  can/rtt/*  |  can/loss/*  |  notify/*  │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -32,7 +32,7 @@ TCP 客户端，运行在 `can_monitor` 进程中，发送 CAN 指标到 notifie
 
 **使用方法：**
 ```python
-from hardware.can_monitor import CANMetricsClient
+from control.hardware.can_monitor import CANMetricsClient
 
 client = CANMetricsClient(host="127.0.0.1", port=9877)
 await client.connect()
@@ -72,7 +72,7 @@ producer.stop_can_server()
 
 ```bash
 # 启动 can_monitor 并发送到 notifier
-python3 -m hardware.can_monitor.cli \
+python -m control.hardware.can_monitor.cli \
     --interface can0 \
     --notifier-host 127.0.0.1 \
     --notifier-port 9877
@@ -132,9 +132,9 @@ python3 -m hardware.can_monitor.cli \
   "timestamp_ns": 1234567890000000000,
   "data": {
     "can_id_map": {"1": 17, "2": 18},
-    "joint_names": {
-      "1": "shoulder_joint",
-      "17": "shoulder_response"
+    "joint_ids": {
+      "17": 0,
+      "18": 1
     }
   }
 }
@@ -156,14 +156,18 @@ python3 -m hardware.can_monitor.cli \
 |------|------|------|
 | `can/rtt/mean` | Scalar | RTT 均值 (ms) |
 | `can/rtt/p95` | Scalar | RTT P95 (ms) |
-| `can/joint/{name}/rtt` | Scalar | 单关节 RTT |
+| `can/rtt/q95` | Scalar | RTT Q95 (ms) (alias) |
+| `can/rtt/{id}` | Scalar | 单关节 RTT |
 
-### 关节统计 (can/joint/)
+### 关节统计 (can/*)
 
 | 路径 | 类型 | 描述 |
 |------|------|------|
-| `can/joint/{name}/fps` | Scalar | 关节帧率 |
-| `can/joint/{name}/jitter_p95` | Scalar | 抖动 P95 (ms) |
+| `can/fps/{id}` | Scalar | 关节帧率 |
+| `can/jitter/{id}` | Scalar | 抖动均值 (ms) |
+| `can/jitter_p95/{id}` | Scalar | 抖动 P95 (ms) |
+| `can/jitter_q95/{id}` | Scalar | 抖动 Q95 (ms) |
+| `can/loss/{id}` | Scalar | 帧丢失比例 (基于 RTT timeout 计数) |
 
 ### 通知 (notify/)
 
@@ -199,8 +203,8 @@ async def main():
 asyncio.run(main())
 "
 
-# 或使用完整 CLI
-python3 -m dataarm_notifier.cli_telemetry
+# 或使用模块 CLI (推荐)
+python -m dataarm_notifier.telemetry --rerun-app-name "CAN_Monitor" --can-server-port 9877 --no-simulation
 ```
 
 ### 2. 启动 Can Monitor
@@ -209,13 +213,13 @@ python3 -m dataarm_notifier.cli_telemetry
 cd /home/lr-2002/project/DataArm/dataarm/control
 
 # 发送到 notifier
-python3 -m hardware.can_monitor.cli \
+python -m control.hardware.can_monitor.cli \
     --interface can0 \
     --notifier-host 127.0.0.1 \
     --notifier-port 9877
 
 # 或使用 dummy notifier (仅控制台输出)
-python3 -m hardware.can_monitor.cli --interface can0
+python -m control.hardware.can_monitor.cli --interface can0
 ```
 
 ### 3. 查看 Rerun

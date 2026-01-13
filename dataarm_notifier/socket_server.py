@@ -14,7 +14,7 @@ from .usb_lamp_controller import USBLampController, LightColor
 class SocketServer:
     """Socket API服务器类"""
 
-    def __init__(self, host='0.0.0.0', port=8888):
+    def __init__(self, host='127.0.0.1', port=8888):
         self.host = host
         self.port = port
         self.controller = USBLampController()
@@ -220,7 +220,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='USB报警灯Socket API服务器')
-    parser.add_argument('--host', default='0.0.0.0', help='监听地址 (默认: 0.0.0.0)')
+    parser.add_argument('--host', default='127.0.0.1', help='监听地址 (默认: 127.0.0.1)')
     parser.add_argument('--port', type=int, default=8888, help='监听端口 (默认: 8888)')
 
     args = parser.parse_args()

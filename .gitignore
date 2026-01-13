@@ -117,3 +117,6 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Local build artifacts (sdist unpack dirs)
+dataarm_notifier-*/

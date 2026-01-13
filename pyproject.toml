@@ -7,7 +7,7 @@ name = "dataarm-notifier"
 version = "1.0.0"
 description = "USB报警灯控制器 - 支持控制红灯、绿灯、蓝灯以及颜色轮换"
 readme = "README.md"
-requires-python = ">=3.6"
+requires-python = ">=3.10,<3.11"
 license = "MIT"
 authors = [
     {name = "lr-2002", email = "wang2629651228@gmail.com"},
@@ -21,17 +21,20 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.6",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Topic :: Hardware :: LEDs",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
     "pyserial>=3.5",
+    # No optional dependencies: install everything in one go.
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "build>=1.0.0",
+    "twine>=5.0.0",
 ]
 
 [project.urls]
@@ -45,16 +48,6 @@ usb-lamp = "dataarm_notifier.usb_lamp_controller:main"
 usb-lamp-server = "dataarm_notifier.socket_server:main"
 usb-lamp-client = "dataarm_notifier.socket_client:main"
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=6.0",
-    "pytest-cov>=2.0",
-    "black>=21.0",
-    "flake8>=3.8",
-    "build>=0.7.0",
-    "twine>=3.4.0",
-]
-
 [tool.setuptools.packages.find]
 include = ["dataarm_notifier*"]
 
@@ -63,7 +56,7 @@ include = ["dataarm_notifier*"]
 
 [tool.black]
 line-length = 88
-target-version = ['py36']
+target-version = ['py310']
 include = '\.pyi?$'
 extend-exclude = '''
 /(

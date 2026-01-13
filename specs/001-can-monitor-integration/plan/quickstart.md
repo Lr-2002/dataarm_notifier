@@ -39,7 +39,8 @@ export PYTHONPATH="/path/to/dataarm/control:$PYTHONPATH"
 # Start notifier with CAN metrics server on port 9877
 python -m dataarm_notifier.telemetry \
     --rerun-app-name "Robot" \
-    --can-server-port 9877
+    --can-server-port 9877 \
+    --no-simulation
 ```
 
 This starts:
@@ -50,7 +51,7 @@ This starts:
 
 ```bash
 # Start can_monitor with notifier connection
-python -m dataarm.control.hardware.can_monitor \
+python -m control.hardware.can_monitor.cli \
     --interface can0 \
     --frequency 20 \
     --notifier-host 127.0.0.1 \
@@ -97,20 +98,16 @@ python -m dataarm.control.hardware.can_monitor \
 ### Notifier (Python)
 
 ```python
-from dataarm_notifier.telemetry import TelemetryProducer, CANMetricsServer
-
-# Create producer (starts Rerun)
-producer = TelemetryProducer("Robot")
-
-# Create and start CAN metrics server
-server = CANMetricsServer(port=9877, producer=producer)
+from dataarm_notifier.telemetry import TelemetryProducer
 
 import asyncio
+
+
 async def main():
-    await server.start()
-    print("CAN server running on port 9877...")
-    # Keep running
-    await asyncio.sleep(float('inf'))
+    producer = TelemetryProducer(app_name="Robot")
+    producer.start_can_server(port=9877)
+    await asyncio.sleep(float("inf"))
+
 
 asyncio.run(main())
 ```
@@ -118,19 +115,14 @@ asyncio.run(main())
 ### can_monitor Integration
 
 ```python
-from dataarm.control.hardware.can_monitor import CANMonitor
-from dataarm.control.hardware.can_monitor.client_adapter import CANMetricsClient
+from control.hardware.can_monitor import CANMonitor, CANMetricsClientNotifier
 
-async def main():
-    # Create client connected to notifier
-    client = CANMetricsClient(host="127.0.0.1", port=9877)
-    await client.connect()
-
-    # Start monitor with client notifier
-    monitor = CANMonitor(notifier=client)
+def main():
+    notifier = CANMetricsClientNotifier(host="127.0.0.1", port=9877, publish_interval_ms=50.0)
+    monitor = CANMonitor(notifier=notifier, can_interface="can0")
     monitor.start()
 
-asyncio.run(main())
+main()
 ```
 
 ## Configuration

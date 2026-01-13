@@ -257,12 +257,13 @@ control/hardware/can_monitor/
 ```bash
 python -m dataarm_notifier.telemetry \
     --rerun-app-name "Robot" \
-    --can-server-port 9877
+    --can-server-port 9877 \
+    --no-simulation
 ```
 
 ### can_monitor 启动
 ```bash
-python -m dataarm.control.hardware.can_monitor \
+python -m control.hardware.can_monitor.cli \
     --interface can0 \
     --notifier-host 127.0.0.1 \
     --notifier-port 9877
