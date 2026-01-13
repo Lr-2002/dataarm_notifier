@@ -31,6 +31,7 @@ class CANMetricsServer:
         host: str = "127.0.0.1",
         app_name: str = "CAN_Metrics",
         init_rerun: bool = True,
+        activate_blueprint: bool = True,
     ):
         """Initialize the CAN metrics server.
 
@@ -43,6 +44,7 @@ class CANMetricsServer:
         self._host = host
         self._app_name = app_name
         self._init_rerun = init_rerun
+        self._activate_blueprint = activate_blueprint
         self._server: Optional[asyncio.Server] = None
         self._running = False
 
@@ -66,7 +68,7 @@ class CANMetricsServer:
         else:
             logger.info("Rerun init skipped (init_rerun=False)")
 
-        self._send_default_blueprint()
+        self._send_default_blueprint(make_active=self._activate_blueprint, make_default=self._activate_blueprint)
 
         self._running = True
         self._server = await asyncio.start_server(
@@ -81,7 +83,7 @@ class CANMetricsServer:
         async with self._server:
             await self._server.serve_forever()
 
-    def _send_default_blueprint(self) -> None:
+    def _send_default_blueprint(self, *, make_active: bool, make_default: bool) -> None:
         """Send a CAN-focused Rerun layout (best-effort)."""
         if self._blueprint_sent:
             return
@@ -89,16 +91,16 @@ class CANMetricsServer:
         try:
             blueprint = rrb.Blueprint(
                 rrb.Vertical(
-                    rrb.TimeSeriesView(origin="/can/bus", name="CAN Bus"),
-                    rrb.TimeSeriesView(origin="/can/fps", name="CAN FPS"),
-                    rrb.TimeSeriesView(origin="/can/jitter", name="CAN Jitter"),
-                    rrb.TimeSeriesView(origin="/can/jitter_q95", name="CAN Jitter Q95"),
-                    rrb.TimeSeriesView(origin="/can/loss", name="CAN Loss"),
-                    rrb.TimeSeriesView(origin="/can/rtt", name="CAN RTT"),
+                    rrb.TimeSeriesView(origin="can/bus", name="CAN Bus"),
+                    rrb.TimeSeriesView(origin="can/fps", name="CAN FPS"),
+                    rrb.TimeSeriesView(origin="can/jitter", name="CAN Jitter"),
+                    rrb.TimeSeriesView(origin="can/jitter_q95", name="CAN Jitter Q95"),
+                    rrb.TimeSeriesView(origin="can/loss", name="CAN Loss"),
+                    rrb.TimeSeriesView(origin="can/rtt", name="CAN RTT"),
                 ),
                 collapse_panels=False,
             )
-            rr.send_blueprint(blueprint, make_active=True, make_default=True)
+            rr.send_blueprint(blueprint, make_active=make_active, make_default=make_default)
             self._blueprint_sent = True
         except Exception as exc:
             logger.debug(f"Failed to send Rerun blueprint: {exc}")

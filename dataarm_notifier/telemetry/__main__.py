@@ -105,7 +105,11 @@ async def _run(args: argparse.Namespace) -> None:
         args.no_simulation = True
 
     if args.can_server_port is not None:
-        producer.start_can_server(port=args.can_server_port, host=args.can_server_host)
+        producer.start_can_server(
+            port=args.can_server_port,
+            host=args.can_server_host,
+            activate_blueprint=(args.arm_server_port is None),
+        )
 
     if args.arm_server_port is not None:
         producer.start_arm_server(port=args.arm_server_port, host=args.arm_server_host)

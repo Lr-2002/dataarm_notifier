@@ -66,8 +66,8 @@ class ArmTelemetryServer:
         try:
             blueprint = rrb.Blueprint(
                 rrb.Vertical(
-                    rrb.TextDocumentView(origin="/arm", name="Arm Telemetry"),
-                    rrb.TextLogView(origin="/arm/events", name="Arm Events"),
+                    rrb.TextDocumentView(origin="arm", name="Arm Telemetry"),
+                    rrb.TextLogView(origin="arm/events", name="Arm Events"),
                 ),
                 collapse_panels=False,
             )
@@ -81,15 +81,24 @@ class ArmTelemetryServer:
         try:
             views: List[rrb.View] = []
             for name in joint_names:
-                views.append(rrb.TimeSeriesView(origin=f"/arm/joints/{name}/pos", name=f"{name} position"))
-                views.append(rrb.TimeSeriesView(origin=f"/arm/joints/{name}/vel", name=f"{name} vel"))
-                views.append(rrb.TimeSeriesView(origin=f"/arm/joints/{name}/acc", name=f"{name} acc"))
-                views.append(rrb.TimeSeriesView(origin=f"/arm/joints/{name}/torque", name=f"{name} torque"))
+                views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/pos", name=f"{name} position"))
+                views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/vel", name=f"{name} vel"))
+                views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/acc", name=f"{name} acc"))
+                views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/torque", name=f"{name} torque"))
 
             blueprint = rrb.Blueprint(
                 rrb.Vertical(
                     rrb.Grid(*views, grid_columns=4, name="Arm Joint Telemetry"),
-                    rrb.TextLogView(origin="/arm/events", name="Arm Events"),
+                    rrb.Vertical(
+                        rrb.TimeSeriesView(origin="can/bus", name="CAN Bus"),
+                        rrb.TimeSeriesView(origin="can/fps", name="CAN FPS"),
+                        rrb.TimeSeriesView(origin="can/jitter", name="CAN Jitter"),
+                        rrb.TimeSeriesView(origin="can/jitter_q95", name="CAN Jitter Q95"),
+                        rrb.TimeSeriesView(origin="can/loss", name="CAN Loss"),
+                        rrb.TimeSeriesView(origin="can/rtt", name="CAN RTT"),
+                        name="CAN Metrics",
+                    ),
+                    rrb.TextLogView(origin="arm/events", name="Arm Events"),
                 ),
                 collapse_panels=False,
             )

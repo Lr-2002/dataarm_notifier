@@ -316,12 +316,15 @@ class TelemetryProducer:
     # CAN Metrics Server Methods (T020)
     # =========================================================================
 
-    def start_can_server(self, port: int = 9877, host: str = "127.0.0.1") -> None:
+    def start_can_server(
+        self, port: int = 9877, host: str = "127.0.0.1", *, activate_blueprint: bool = True
+    ) -> None:
         """Start the CAN metrics TCP server.
 
         Args:
             port: TCP port to listen on (default: 9877)
             host: Host address to bind (default: 127.0.0.1)
+            activate_blueprint: If True, makes the CAN layout active/default in Rerun.
         """
         if self._can_server is not None:
             logger.warning("CAN metrics server already running")
@@ -332,6 +335,7 @@ class TelemetryProducer:
             host=host,
             app_name=self.app_name,
             init_rerun=False,
+            activate_blueprint=activate_blueprint,
         )
         self._can_server_task = asyncio.create_task(self._can_server.start())
         logger.info(f"CAN metrics server starting on {host}:{port}")
