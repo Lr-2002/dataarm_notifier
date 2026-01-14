@@ -89,48 +89,38 @@ class ArmTelemetryServer:
         if self._blueprint_sent:
             return
         try:
-            pos_vel_views: List[rrb.View] = []
-            acc_torque_views: List[rrb.View] = []
+            pos_views: List[rrb.View] = []
+            vel_views: List[rrb.View] = []
             for name in joint_names:
-                pos_vel_views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/pos", name=f"{name} position"))
-                pos_vel_views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/vel", name=f"{name} vel"))
-                acc_torque_views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/acc", name=f"{name} acc"))
-                acc_torque_views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/torque", name=f"{name} torque"))
+                pos_views.append(
+                    rrb.TimeSeriesView(
+                        origin=f"arm/joints/{name}/pos",
+                        contents="$origin",
+                        name=f"{name} pos",
+                    )
+                )
+                vel_views.append(
+                    rrb.TimeSeriesView(
+                        origin=f"arm/joints/{name}/vel",
+                        contents="$origin",
+                        name=f"{name} vel",
+                    )
+                )
 
-            joint_pos_vel = rrb.Grid(*pos_vel_views, grid_columns=2, name="Arm Joint Pos/Vel")
-            joint_acc_torque = rrb.Grid(*acc_torque_views, grid_columns=2, name="Arm Joint Acc/Torque")
-            arm_events = rrb.TextLogView(origin="arm/events", name="Arm Events", visible=False)
-
-            can_basic = rrb.Grid(
+            can_monitor = rrb.Vertical(
                 rrb.TimeSeriesView(origin="can/fps", name="CAN FPS"),
                 rrb.TimeSeriesView(origin="can/jitter", name="CAN Jitter"),
-                grid_columns=1,
-                name="CAN FPS/Jitter",
-            )
-            can_advanced = rrb.Grid(
-                rrb.TimeSeriesView(origin="can/bus", name="CAN Bus"),
-                rrb.TimeSeriesView(origin="can/rtt", name="CAN RTT"),
-                rrb.TimeSeriesView(origin="can/loss", name="CAN Loss"),
-                rrb.TimeSeriesView(origin="can/jitter_q95", name="CAN Jitter Q95"),
-                grid_columns=1,
-                name="CAN Advanced",
+                name="CAN Monitor",
             )
 
             blueprint = rrb.Blueprint(
                 rrb.Vertical(
-                    rrb.Tabs(
-                        joint_pos_vel,
-                        joint_acc_torque,
-                        arm_events,
-                        active_tab=joint_pos_vel.name,
-                        name="Arm Joint Telemetry",
+                    rrb.Horizontal(
+                        rrb.Vertical(*pos_views, name="Position"),
+                        rrb.Vertical(*vel_views, name="Velocity"),
+                        name="Arm Telemetry",
                     ),
-                    rrb.Tabs(
-                        can_basic,
-                        can_advanced,
-                        active_tab=can_basic.name,
-                        name="CAN Monitor",
-                    ),
+                    can_monitor,
                     name="DataArm Telemetry",
                 ),
                 collapse_panels=False,
@@ -185,9 +175,6 @@ class ArmTelemetryServer:
     def _process_message(self, message: Dict[str, Any]) -> None:
         msg_type = message.get("type")
         data = message.get("data", {}) if isinstance(message.get("data"), dict) else {}
-        t = data.get("t")
-        if isinstance(t, (int, float)):
-            rr.set_time_seconds(self._timeline, float(t))
 
         if msg_type == "event":
             level = str(data.get("level") or "INFO")
