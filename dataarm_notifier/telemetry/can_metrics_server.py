@@ -89,14 +89,28 @@ class CANMetricsServer:
             return
 
         try:
+            can_basic = rrb.Grid(
+                rrb.TimeSeriesView(origin="can/fps", name="CAN FPS"),
+                rrb.TimeSeriesView(origin="can/jitter", name="CAN Jitter"),
+                grid_columns=1,
+                name="CAN FPS/Jitter",
+            )
+            can_advanced = rrb.Grid(
+                rrb.TimeSeriesView(origin="can/bus", name="CAN Bus"),
+                rrb.TimeSeriesView(origin="can/rtt", name="CAN RTT"),
+                rrb.TimeSeriesView(origin="can/loss", name="CAN Loss"),
+                rrb.TimeSeriesView(origin="can/jitter_q95", name="CAN Jitter Q95"),
+                grid_columns=1,
+                name="CAN Advanced",
+            )
             blueprint = rrb.Blueprint(
                 rrb.Vertical(
-                    rrb.TimeSeriesView(origin="can/bus", name="CAN Bus"),
-                    rrb.TimeSeriesView(origin="can/fps", name="CAN FPS"),
-                    rrb.TimeSeriesView(origin="can/jitter", name="CAN Jitter"),
-                    rrb.TimeSeriesView(origin="can/jitter_q95", name="CAN Jitter Q95"),
-                    rrb.TimeSeriesView(origin="can/loss", name="CAN Loss"),
-                    rrb.TimeSeriesView(origin="can/rtt", name="CAN RTT"),
+                    rrb.Tabs(
+                        can_basic,
+                        can_advanced,
+                        active_tab=can_basic.name,
+                        name="CAN Monitor",
+                    ),
                 ),
                 collapse_panels=False,
             )

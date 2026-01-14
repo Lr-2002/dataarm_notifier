@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 from typing import Any, Dict, List, Optional
@@ -45,6 +46,7 @@ class ArmTelemetryServer:
             self._handle_client,
             self._host,
             self._port,
+            limit=4 * 1024 * 1024,
             reuse_address=True,
         )
         addr = self._server.sockets[0].getsockname()
@@ -60,14 +62,22 @@ class ArmTelemetryServer:
             logger.info("Arm telemetry server stopped")
 
     def _send_default_blueprint(self) -> None:
-        # Send a placeholder; once we know joint names we replace with a detailed grid.
+        # Send a lightweight placeholder; once we know joint names we replace with a detailed grid.
         if self._blueprint_sent:
             return
         try:
+            # Ensure `/arm` is a valid entity (users often click it in the UI).
+            rr.log(
+                "arm",
+                rr.TextDocument(
+                    "# Arm telemetry\n\nExpand `/arm/joints/...` for per-joint plots.",
+                    media_type="text/markdown",
+                ),
+            )
             blueprint = rrb.Blueprint(
                 rrb.Vertical(
-                    rrb.TextDocumentView(origin="arm", name="Arm Telemetry"),
-                    rrb.TextLogView(origin="arm/events", name="Arm Events"),
+                    rrb.TimeSeriesView(origin="arm/joints", name="Arm Joint Telemetry"),
+                    rrb.TextLogView(origin="arm/events", name="Arm Events", visible=False),
                 ),
                 collapse_panels=False,
             )
@@ -79,33 +89,74 @@ class ArmTelemetryServer:
         if self._blueprint_sent:
             return
         try:
-            views: List[rrb.View] = []
+            pos_vel_views: List[rrb.View] = []
+            acc_torque_views: List[rrb.View] = []
             for name in joint_names:
-                views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/pos", name=f"{name} position"))
-                views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/vel", name=f"{name} vel"))
-                views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/acc", name=f"{name} acc"))
-                views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/torque", name=f"{name} torque"))
+                pos_vel_views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/pos", name=f"{name} position"))
+                pos_vel_views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/vel", name=f"{name} vel"))
+                acc_torque_views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/acc", name=f"{name} acc"))
+                acc_torque_views.append(rrb.TimeSeriesView(origin=f"arm/joints/{name}/torque", name=f"{name} torque"))
+
+            joint_pos_vel = rrb.Grid(*pos_vel_views, grid_columns=2, name="Arm Joint Pos/Vel")
+            joint_acc_torque = rrb.Grid(*acc_torque_views, grid_columns=2, name="Arm Joint Acc/Torque")
+            arm_events = rrb.TextLogView(origin="arm/events", name="Arm Events", visible=False)
+
+            can_basic = rrb.Grid(
+                rrb.TimeSeriesView(origin="can/fps", name="CAN FPS"),
+                rrb.TimeSeriesView(origin="can/jitter", name="CAN Jitter"),
+                grid_columns=1,
+                name="CAN FPS/Jitter",
+            )
+            can_advanced = rrb.Grid(
+                rrb.TimeSeriesView(origin="can/bus", name="CAN Bus"),
+                rrb.TimeSeriesView(origin="can/rtt", name="CAN RTT"),
+                rrb.TimeSeriesView(origin="can/loss", name="CAN Loss"),
+                rrb.TimeSeriesView(origin="can/jitter_q95", name="CAN Jitter Q95"),
+                grid_columns=1,
+                name="CAN Advanced",
+            )
 
             blueprint = rrb.Blueprint(
                 rrb.Vertical(
-                    rrb.Grid(*views, grid_columns=4, name="Arm Joint Telemetry"),
-                    rrb.Vertical(
-                        rrb.TimeSeriesView(origin="can/bus", name="CAN Bus"),
-                        rrb.TimeSeriesView(origin="can/fps", name="CAN FPS"),
-                        rrb.TimeSeriesView(origin="can/jitter", name="CAN Jitter"),
-                        rrb.TimeSeriesView(origin="can/jitter_q95", name="CAN Jitter Q95"),
-                        rrb.TimeSeriesView(origin="can/loss", name="CAN Loss"),
-                        rrb.TimeSeriesView(origin="can/rtt", name="CAN RTT"),
-                        name="CAN Metrics",
+                    rrb.Tabs(
+                        joint_pos_vel,
+                        joint_acc_torque,
+                        arm_events,
+                        active_tab=joint_pos_vel.name,
+                        name="Arm Joint Telemetry",
                     ),
-                    rrb.TextLogView(origin="arm/events", name="Arm Events"),
+                    rrb.Tabs(
+                        can_basic,
+                        can_advanced,
+                        active_tab=can_basic.name,
+                        name="CAN Monitor",
+                    ),
+                    name="DataArm Telemetry",
                 ),
                 collapse_panels=False,
             )
             rr.send_blueprint(blueprint, make_active=True, make_default=False)
             self._blueprint_sent = True
+            logger.info(f"Sent arm telemetry blueprint ({len(joint_names)} joints)")
         except Exception as exc:
-            logger.debug(f"Failed to send Rerun joint grid blueprint: {exc}")
+            logger.warning(f"Failed to send Rerun joint grid blueprint: {exc}")
+
+    def _log_static_series_styles(self, joint_names: List[str]) -> None:
+        """Log SeriesLines naming so TimeSeriesView origins always exist and are readable."""
+        for name in joint_names:
+            try:
+                rr.log(
+                    f"arm/joints/{name}/pos",
+                    rr.SeriesLines(names=["target", "actual"]),
+                    static=True,
+                )
+                rr.log(
+                    f"arm/joints/{name}/vel",
+                    rr.SeriesLines(names=["raw", "filtered"]),
+                    static=True,
+                )
+            except Exception:
+                continue
 
     async def _handle_client(
         self,
@@ -134,12 +185,48 @@ class ArmTelemetryServer:
     def _process_message(self, message: Dict[str, Any]) -> None:
         msg_type = message.get("type")
         data = message.get("data", {}) if isinstance(message.get("data"), dict) else {}
-        if msg_type != "sample":
-            return
-
         t = data.get("t")
         if isinstance(t, (int, float)):
             rr.set_time_seconds(self._timeline, float(t))
+
+        if msg_type == "event":
+            level = str(data.get("level") or "INFO")
+            msg = str(data.get("msg") or "")
+            if msg:
+                rr.log("arm/events", rr.TextLog(msg, level=level))
+            return
+
+        if msg_type == "gripper_sample":
+            name = str(data.get("name") or "gripper")
+            pos = data.get("pos")
+            target = data.get("target")
+            velocity = data.get("velocity")
+            torque_enabled = data.get("torque_enabled")
+            if isinstance(pos, (int, float)):
+                rr.log(f"gripper/{name}/pos", rr.Scalars(float(pos)))
+            if isinstance(target, (int, float)):
+                rr.log(f"gripper/{name}/target", rr.Scalars(float(target)))
+            if isinstance(velocity, (int, float)):
+                rr.log(f"gripper/{name}/vel", rr.Scalars(float(velocity)))
+            if torque_enabled is not None:
+                rr.log(f"gripper/{name}/torque_enabled", rr.Scalars(1.0 if bool(torque_enabled) else 0.0))
+            return
+
+        if msg_type == "camera_frame":
+            name = str(data.get("name") or "camera")
+            position = str(data.get("position") or "unknown")
+            jpeg_b64 = data.get("jpeg")
+            if not isinstance(jpeg_b64, str) or not jpeg_b64:
+                return
+            try:
+                jpeg_bytes = base64.b64decode(jpeg_b64.encode("ascii"), validate=False)
+            except Exception:
+                return
+            rr.log(f"camera/{position}/{name}", rr.EncodedImage(contents=jpeg_bytes, media_type="image/jpeg"))
+            return
+
+        if msg_type != "sample":
+            return
 
         target = data.get("target")
         pos = data.get("pos")
@@ -162,20 +249,30 @@ class ArmTelemetryServer:
         if not self._joint_names:
             self._joint_names = names[:]
             self._send_joint_grid_blueprint(self._joint_names)
+            self._log_static_series_styles(self._joint_names)
 
         n = min(len(target), len(pos), len(vel), len(torque))
         for i in range(n):
             name = names[i] if i < len(names) and names[i] else f"j{i+1}"
             prefix = f"arm/joints/{name}"
-            rr.log(f"{prefix}/pos/target", rr.Scalars(float(target[i])))
-            rr.log(f"{prefix}/pos/actual", rr.Scalars(float(pos[i])))
-            rr.log(f"{prefix}/pos/tracking_error", rr.Scalars(abs(float(target[i]) - float(pos[i]))))
-
-            rr.log(f"{prefix}/vel/raw", rr.Scalars(float(vel[i])))
+            tgt = float(target[i])
+            actual = float(pos[i])
+            vel_raw = float(vel[i])
+            vel_filt_val = vel_raw
             if isinstance(vel_filtered, list) and i < len(vel_filtered):
-                rr.log(f"{prefix}/vel/filtered", rr.Scalars(float(vel_filtered[i])))
+                try:
+                    vel_filt_val = float(vel_filtered[i])
+                except Exception:
+                    vel_filt_val = vel_raw
+
+            rr.log(f"{prefix}/pos", rr.Scalars([tgt, actual]))
+            rr.log(f"{prefix}/vel", rr.Scalars([vel_raw, vel_filt_val]))
+            rr.log(f"{prefix}/pos/tracking_error", rr.Scalars(abs(tgt - actual)))
 
             if isinstance(acc_filtered, list) and i < len(acc_filtered):
-                rr.log(f"{prefix}/acc/filtered", rr.Scalars(float(acc_filtered[i])))
+                try:
+                    rr.log(f"{prefix}/acc", rr.Scalars(float(acc_filtered[i])))
+                except Exception:
+                    pass
 
-            rr.log(f"{prefix}/torque/raw", rr.Scalars(float(torque[i])))
+            rr.log(f"{prefix}/torque", rr.Scalars(float(torque[i])))
