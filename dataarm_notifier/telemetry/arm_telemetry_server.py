@@ -226,21 +226,19 @@ class ArmTelemetryServer:
         if not (isinstance(target, list) and isinstance(pos, list) and isinstance(vel, list) and isinstance(torque, list)):
             return
 
-        names: List[str] = []
-        if isinstance(joint_names, list):
-            names = [str(x) for x in joint_names]
-
-        if not names:
-            names = [f"j{i+1}" for i in range(len(pos))]
+        # Display/record joint telemetry using URDF-style joint indices (j1..jN).
+        # This avoids coupling the UI to semantic CAN config names (e.g. shoulder_joint)
+        # and makes it clear that the gripper is a separate USB servo component.
+        n = min(len(target), len(pos), len(vel), len(torque))
+        names = [f"j{i+1}" for i in range(n)]
 
         if not self._joint_names:
             self._joint_names = names[:]
             self._send_joint_grid_blueprint(self._joint_names)
             self._log_static_series_styles(self._joint_names)
 
-        n = min(len(target), len(pos), len(vel), len(torque))
         for i in range(n):
-            name = names[i] if i < len(names) and names[i] else f"j{i+1}"
+            name = names[i]
             prefix = f"arm/joints/{name}"
             tgt = float(target[i])
             actual = float(pos[i])
