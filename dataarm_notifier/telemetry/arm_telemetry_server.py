@@ -21,7 +21,10 @@ class ArmTelemetryServer:
       {"type":"sample","data":{
          "t": 12.34,                      # seconds (relative or absolute)
          "joint_names": ["j1", ...],      # optional
-         "target": [..], "pos":[..], "vel":[..], "torque":[..]
+         "target": [..], "pos":[..], "vel":[..], "torque":[..],
+         "vel_filtered": [..],            # optional (filtered raw velocity)
+         "vel_boundary": [..],            # optional (URDF vel * tracking_speed_factor)
+         "traj_vel_filtered": [..],       # optional (filtered trajectory velocity)
       }}
     """
 
@@ -142,7 +145,14 @@ class ArmTelemetryServer:
                 )
                 rr.log(
                     f"arm/joints/{name}/vel",
-                    rr.SeriesLines(names=["raw", "filtered"]),
+                    rr.SeriesLines(
+                        names=[
+                            "raw vel",
+                            "filtered raw vel",
+                            "boundary velocity limit",
+                            "filtered traj vel",
+                        ]
+                    ),
                     static=True,
                 )
             except Exception:
@@ -223,6 +233,8 @@ class ArmTelemetryServer:
         joint_names = data.get("joint_names")
         vel_filtered = data.get("vel_filtered")
         acc_filtered = data.get("acc_filtered")
+        vel_boundary = data.get("vel_boundary")
+        traj_vel_filtered = data.get("traj_vel_filtered")
 
         if not (isinstance(target, list) and isinstance(pos, list) and isinstance(vel, list) and isinstance(torque, list)):
             return
@@ -257,8 +269,22 @@ class ArmTelemetryServer:
                 except Exception:
                     vel_filt_val = vel_raw
 
+            boundary_val = float("nan")
+            if isinstance(vel_boundary, list) and i < len(vel_boundary):
+                try:
+                    boundary_val = float(vel_boundary[i])
+                except Exception:
+                    boundary_val = float("nan")
+
+            traj_vel_val = float("nan")
+            if isinstance(traj_vel_filtered, list) and i < len(traj_vel_filtered):
+                try:
+                    traj_vel_val = float(traj_vel_filtered[i])
+                except Exception:
+                    traj_vel_val = float("nan")
+
             rr.log(f"{prefix}/pos", rr.Scalars([tgt, actual, traj_val]))
-            rr.log(f"{prefix}/vel", rr.Scalars([vel_raw, vel_filt_val]))
+            rr.log(f"{prefix}/vel", rr.Scalars([vel_raw, vel_filt_val, boundary_val, traj_vel_val]))
             rr.log(f"{prefix}/pos/tracking_error", rr.Scalars(abs(tgt - actual)))
 
             if isinstance(acc_filtered, list) and i < len(acc_filtered):
