@@ -6,12 +6,34 @@ import asyncio
 import base64
 import json
 import logging
+import os
+import time
 from typing import Any, Dict, List, Optional
 
 import rerun as rr
 import rerun.blueprint as rrb
 
 logger = logging.getLogger(__name__)
+
+_ENV_IDLE_TIMEOUT_S = "DATAARM_NOTIFIER_ARM_IDLE_TIMEOUT_S"
+_ENV_DROP_CAMERA_WHEN_IDLE = "DATAARM_NOTIFIER_ARM_IDLE_DROP_CAMERA"
+
+
+def _parse_env_bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _read_env_float(name: str) -> Optional[float]:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except Exception:
+        return None
 
 
 class ArmTelemetryServer:
@@ -33,6 +55,8 @@ class ArmTelemetryServer:
         port: int = 9878,
         host: str = "127.0.0.1",
         timeline: str = "time_s",
+        idle_timeout_s: Optional[float] = None,
+        drop_camera_when_idle: Optional[bool] = None,
     ):
         self._port = port
         self._host = host
@@ -41,6 +65,34 @@ class ArmTelemetryServer:
         self._running = False
         self._blueprint_sent = False
         self._joint_names: List[str] = []
+
+        env_idle_timeout_s = _read_env_float(_ENV_IDLE_TIMEOUT_S)
+        if idle_timeout_s is None:
+            idle_timeout_s = env_idle_timeout_s
+        if idle_timeout_s is not None and float(idle_timeout_s) <= 0.0:
+            idle_timeout_s = None
+
+        if drop_camera_when_idle is None:
+            env_drop = os.getenv(_ENV_DROP_CAMERA_WHEN_IDLE)
+            drop_camera_when_idle = _parse_env_bool(env_drop) if env_drop is not None else False
+
+        self._idle_timeout_s = float(idle_timeout_s) if idle_timeout_s is not None else None
+        self._drop_camera_when_idle = bool(drop_camera_when_idle)
+
+        self._last_arm_sample_mono_s = time.monotonic()
+        self._logged_idle_for_camera = False
+
+    def _arm_is_active(self, now_mono_s: Optional[float] = None) -> bool:
+        if self._idle_timeout_s is None:
+            return True
+        now_mono_s = time.monotonic() if now_mono_s is None else float(now_mono_s)
+        return (now_mono_s - self._last_arm_sample_mono_s) <= self._idle_timeout_s
+
+    def _log_arm_event(self, msg: str, level: str = "INFO") -> None:
+        try:
+            rr.log("arm/events", rr.TextLog(msg, level=level))
+        except Exception:
+            pass
 
     async def start(self) -> None:
         self._send_default_blueprint()
@@ -168,6 +220,23 @@ class ArmTelemetryServer:
                 data = await reader.readline()
                 if not data:
                     break
+
+                # Fast-path: when the arm is idle, drop camera frames before JSON parsing.
+                # This avoids decoding large base64 blobs during long idle periods.
+                if (
+                    self._drop_camera_when_idle
+                    and self._idle_timeout_s is not None
+                    and (not self._arm_is_active())
+                    and (b"\"type\":\"camera_frame\"" in data)
+                ):
+                    if not self._logged_idle_for_camera:
+                        idle_for_s = time.monotonic() - self._last_arm_sample_mono_s
+                        self._log_arm_event(
+                            f"No arm telemetry for {idle_for_s:.1f}s; pausing camera telemetry processing.",
+                            level="INFO",
+                        )
+                        self._logged_idle_for_camera = True
+                    continue
                 try:
                     message = json.loads(data.decode())
                 except json.JSONDecodeError:
@@ -210,6 +279,17 @@ class ArmTelemetryServer:
             return
 
         if msg_type == "camera_frame":
+            if self._drop_camera_when_idle and self._idle_timeout_s is not None and (not self._arm_is_active()):
+                # If we got here we already paid the JSON parse cost (e.g. different separators);
+                # still avoid base64 decode + Rerun logging.
+                if not self._logged_idle_for_camera:
+                    idle_for_s = time.monotonic() - self._last_arm_sample_mono_s
+                    self._log_arm_event(
+                        f"No arm telemetry for {idle_for_s:.1f}s; pausing camera telemetry processing.",
+                        level="INFO",
+                    )
+                    self._logged_idle_for_camera = True
+                return
             name = str(data.get("name") or "camera")
             position = str(data.get("position") or "unknown")
             jpeg_b64 = data.get("jpeg")
@@ -224,6 +304,21 @@ class ArmTelemetryServer:
 
         if msg_type != "sample":
             return
+
+        now_mono_s = time.monotonic()
+        was_idle = (
+            self._drop_camera_when_idle
+            and self._idle_timeout_s is not None
+            and (not self._arm_is_active(now_mono_s))
+        )
+        self._last_arm_sample_mono_s = now_mono_s
+        if was_idle:
+            if self._logged_idle_for_camera:
+                self._log_arm_event(
+                    "Arm telemetry resumed; resuming camera telemetry processing.",
+                    level="INFO",
+                )
+            self._logged_idle_for_camera = False
 
         target = data.get("target")
         traj = data.get("traj")
