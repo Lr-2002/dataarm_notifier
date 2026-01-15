@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import os
 import time
 from typing import Any, Dict, List, Optional
@@ -81,6 +82,24 @@ class ArmTelemetryServer:
 
         self._last_arm_sample_mono_s = time.monotonic()
         self._logged_idle_for_camera = False
+        self._time_zero_s: Optional[float] = None
+
+    def _maybe_set_time(self, t_value: Any) -> None:
+        """Set the active Rerun time cursor from a message timestamp.
+
+        We normalize all incoming timestamps to start at ~0s by subtracting the
+        first seen timestamp. If timestamps jump backwards significantly (e.g.
+        switching from live epoch time to a recorded trajectory starting at 0),
+        we automatically reset the baseline.
+        """
+        if not isinstance(t_value, (int, float)):
+            return
+        t = float(t_value)
+        if not math.isfinite(t):
+            return
+        if self._time_zero_s is None or t < (self._time_zero_s - 1.0):
+            self._time_zero_s = t
+        rr.set_time_seconds(self._timeline, t - self._time_zero_s)
 
     def _arm_is_active(self, now_mono_s: Optional[float] = None) -> bool:
         if self._idle_timeout_s is None:
@@ -131,7 +150,7 @@ class ArmTelemetryServer:
             )
             blueprint = rrb.Blueprint(
                 rrb.Vertical(
-                    rrb.TimeSeriesView(origin="arm/joints", name="Arm Joint Telemetry"),
+                    rrb.TimeSeriesView(origin="arm/joints", contents="$origin/**", name="Arm Joint Telemetry"),
                     rrb.TextLogView(origin="arm/events", name="Arm Events", visible=False),
                 ),
                 collapse_panels=False,
@@ -146,6 +165,7 @@ class ArmTelemetryServer:
         try:
             pos_views: List[rrb.View] = []
             vel_views: List[rrb.View] = []
+            torque_views: List[rrb.View] = []
             for name in joint_names:
                 pos_views.append(
                     rrb.TimeSeriesView(
@@ -161,6 +181,14 @@ class ArmTelemetryServer:
                         name=f"{name} vel",
                     )
                 )
+                torque_views.append(
+                    rrb.TimeSeriesView(
+                        origin=f"arm/joints/{name}/torque",
+                        contents="$origin",
+                        name=f"{name} torque",
+                        visible=False,
+                    )
+                )
 
             can_monitor = rrb.Vertical(
                 rrb.TimeSeriesView(origin="can/fps", name="CAN FPS"),
@@ -173,9 +201,11 @@ class ArmTelemetryServer:
                     rrb.Horizontal(
                         rrb.Vertical(*pos_views, name="Position"),
                         rrb.Vertical(*vel_views, name="Velocity"),
+                        rrb.Vertical(*torque_views, name="Torque"),
                         name="Arm Telemetry",
                     ),
                     can_monitor,
+                    rrb.TextLogView(origin="arm/events", name="Arm Events", visible=False),
                     name="DataArm Telemetry",
                 ),
                 collapse_panels=False,
@@ -205,6 +235,11 @@ class ArmTelemetryServer:
                             "filtered traj vel",
                         ]
                     ),
+                    static=True,
+                )
+                rr.log(
+                    f"arm/joints/{name}/torque",
+                    rr.SeriesLines(names=["torque"]),
                     static=True,
                 )
             except Exception:
@@ -254,6 +289,7 @@ class ArmTelemetryServer:
     def _process_message(self, message: Dict[str, Any]) -> None:
         msg_type = message.get("type")
         data = message.get("data", {}) if isinstance(message.get("data"), dict) else {}
+        self._maybe_set_time(data.get("t"))
 
         if msg_type == "event":
             level = str(data.get("level") or "INFO")

@@ -65,8 +65,11 @@ class TelemetryProducer:
         # Initialize Rerun
         if connect:
             rr.init(app_name, spawn=False)
-            rr.connect(connect)
-            logger.info(f"Connected to Rerun viewer at {connect}")
+            url = str(connect).strip()
+            if "://" not in url:
+                url = f"rerun+http://{url}/proxy"
+            rr.connect_grpc(url)
+            logger.info(f"Connected to Rerun viewer at {url}")
         else:
             rr.init(app_name, spawn=True)
             logger.info(f"Started Rerun viewer: {app_name}")
