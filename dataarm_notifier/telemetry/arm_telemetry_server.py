@@ -137,7 +137,7 @@ class ArmTelemetryServer:
             try:
                 rr.log(
                     f"arm/joints/{name}/pos",
-                    rr.SeriesLines(names=["target", "actual"]),
+                    rr.SeriesLines(names=["target", "actual", "traj"]),
                     static=True,
                 )
                 rr.log(
@@ -216,6 +216,7 @@ class ArmTelemetryServer:
             return
 
         target = data.get("target")
+        traj = data.get("traj")
         pos = data.get("pos")
         vel = data.get("vel")
         torque = data.get("torque")
@@ -242,6 +243,12 @@ class ArmTelemetryServer:
             prefix = f"arm/joints/{name}"
             tgt = float(target[i])
             actual = float(pos[i])
+            traj_val = float("nan")
+            if isinstance(traj, list) and i < len(traj):
+                try:
+                    traj_val = float(traj[i])
+                except Exception:
+                    traj_val = float("nan")
             vel_raw = float(vel[i])
             vel_filt_val = vel_raw
             if isinstance(vel_filtered, list) and i < len(vel_filtered):
@@ -250,7 +257,7 @@ class ArmTelemetryServer:
                 except Exception:
                     vel_filt_val = vel_raw
 
-            rr.log(f"{prefix}/pos", rr.Scalars([tgt, actual]))
+            rr.log(f"{prefix}/pos", rr.Scalars([tgt, actual, traj_val]))
             rr.log(f"{prefix}/vel", rr.Scalars([vel_raw, vel_filt_val]))
             rr.log(f"{prefix}/pos/tracking_error", rr.Scalars(abs(tgt - actual)))
 
