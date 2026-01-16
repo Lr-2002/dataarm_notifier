@@ -44,7 +44,10 @@ class ArmTelemetryServer:
       {"type":"sample","data":{
          "t": 12.34,                      # seconds (relative or absolute)
          "joint_names": ["j1", ...],      # optional
-         "target": [..], "pos":[..], "vel":[..], "torque":[..],
+         "target": [..],                  # optional target positions
+         "applied_target": [..],          # optional (post-clamp setpoint from C++ loop)
+         "pos":[..], "vel":[..], "torque":[..],
+         "torque_ff": [..],               # optional (feedforward / predicted torque)
          "vel_filtered": [..],            # optional (filtered raw velocity)
          "vel_boundary": [..],            # optional (URDF vel * tracking_speed_factor)
          "traj_vel_filtered": [..],       # optional (filtered trajectory velocity)
@@ -186,7 +189,7 @@ class ArmTelemetryServer:
                         origin=f"arm/joints/{name}/torque",
                         contents="$origin",
                         name=f"{name} torque",
-                        visible=False,
+                        visible=True,
                     )
                 )
 
@@ -222,7 +225,7 @@ class ArmTelemetryServer:
             try:
                 rr.log(
                     f"arm/joints/{name}/pos",
-                    rr.SeriesLines(names=["target", "actual", "traj"]),
+                    rr.SeriesLines(names=["target", "applied", "actual", "traj"]),
                     static=True,
                 )
                 rr.log(
@@ -239,7 +242,7 @@ class ArmTelemetryServer:
                 )
                 rr.log(
                     f"arm/joints/{name}/torque",
-                    rr.SeriesLines(names=["torque"]),
+                    rr.SeriesLines(names=["torque", "feedforward torque"]),
                     static=True,
                 )
             except Exception:
@@ -357,10 +360,12 @@ class ArmTelemetryServer:
             self._logged_idle_for_camera = False
 
         target = data.get("target")
+        applied_target = data.get("applied_target")
         traj = data.get("traj")
         pos = data.get("pos")
         vel = data.get("vel")
         torque = data.get("torque")
+        torque_ff = data.get("torque_ff")
         joint_names = data.get("joint_names")
         vel_filtered = data.get("vel_filtered")
         acc_filtered = data.get("acc_filtered")
@@ -385,6 +390,12 @@ class ArmTelemetryServer:
             name = names[i]
             prefix = f"arm/joints/{name}"
             tgt = float(target[i])
+            applied_val = float("nan")
+            if isinstance(applied_target, list) and i < len(applied_target):
+                try:
+                    applied_val = float(applied_target[i])
+                except Exception:
+                    applied_val = float("nan")
             actual = float(pos[i])
             traj_val = float("nan")
             if isinstance(traj, list) and i < len(traj):
@@ -414,7 +425,7 @@ class ArmTelemetryServer:
                 except Exception:
                     traj_vel_val = float("nan")
 
-            rr.log(f"{prefix}/pos", rr.Scalars([tgt, actual, traj_val]))
+            rr.log(f"{prefix}/pos", rr.Scalars([tgt, applied_val, actual, traj_val]))
             rr.log(f"{prefix}/vel", rr.Scalars([vel_raw, vel_filt_val, boundary_val, traj_vel_val]))
             rr.log(f"{prefix}/pos/tracking_error", rr.Scalars(abs(tgt - actual)))
 
@@ -424,4 +435,10 @@ class ArmTelemetryServer:
                 except Exception:
                     pass
 
-            rr.log(f"{prefix}/torque", rr.Scalars(float(torque[i])))
+            torque_ff_val = float("nan")
+            if isinstance(torque_ff, list) and i < len(torque_ff):
+                try:
+                    torque_ff_val = float(torque_ff[i])
+                except Exception:
+                    torque_ff_val = float("nan")
+            rr.log(f"{prefix}/torque", rr.Scalars([float(torque[i]), torque_ff_val]))
